@@ -1,0 +1,29 @@
+--- CONSORT Flow Diagram Data Generation ---
+
+
+                         Assessed for Eligibility
+                                (N=17,160)
+                                   |
+                                   v
+                         Excluded (n=407)
+                           |-- Duplicates/Test/MT4: 407
+                                   |
+                                   v
+                         Randomized (ITT N=16,753)
+                                   |
+                                   v
+                         Excluded (n=1,791)
+                           |-- Transferred Out:     558
+                           |-- Missing Outcome/NA:  668
+                           |-- Not Evaluated (NC):  565
+                                   |
+                                   v
+                         Analyzed (mITT N=14,962)
+                                   |
+          ---------------------------------------------------
+
+Allocation & Analysis:
+Control                SMS Reminder         Platform (SBCC)      Keheala             
+--------------------   ------------------   ------------------   ------------------  
+Allocated: 2,224       Allocated: 1,670     Allocated: 6,793     Allocated: 6,066    
+Analyzed:  1,997       Analyzed:  1,475     Analyzed:  6,057     Analyzed:  5,433    
