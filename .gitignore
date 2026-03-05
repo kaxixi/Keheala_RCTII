@@ -23,6 +23,10 @@ Python_Analysis/output/missing_value_logic_review.md
 # Manuscript PDF
 Keheala_RCTII.pdf
 
+# Internal-use scripts and output (not for public sharing)
+Python_Analysis/export_clinic_table.py
+Python_Analysis/internal_output/
+
 # Session logs and archives
 Python_Analysis/Antigravity_Logs/
 Python_Analysis/Claude_Logs/
