@@ -325,11 +325,11 @@ def analyze_table1(df_study_mitt):
         if target_col:
             val = df[target_col].astype(str).str.strip().str.upper()
             
-            # MD/TO
-            # Exclude 'MT4' from here because they are DROPPED.
-            # Only TO, NTB, TRANSFER OUT, etc.
+            # TO or MT4: patients who left the DS-TB analytic cohort for a new record
+            # elsewhere (TO = transferred to another facility; MT4 = moved to DR-TB
+            # register). Grouped together because they are analytically equivalent.
             df['md_to_dummy'] = 0
-            mask_mdto = val.isin(['TO', 'NTB', 'TRANSFER OUT', 'NOT TB', 'MDR-TB']) 
+            mask_mdto = val.isin(['TO', 'MT4', 'NTB', 'TRANSFER OUT', 'NOT TB', 'MDR-TB'])
             df.loc[mask_mdto, 'md_to_dummy'] = 1
             
             # Missing/NC
@@ -362,7 +362,7 @@ def analyze_table1(df_study_mitt):
         ("Bacteriologically Confirmed (N, \\%)", "bacteriologically_confirmed", "binary"),
         ("Age in Years (Avg., Min--Max)", "age_in_years", "mean_minmax"),
         # Exclusion rows (with hline before)
-        ("Misdiagnosed or Transferred Out (N, \\%)", "md_to_dummy", "binary"),
+        ("Transferred Out (TO or MT4) (N, \\%)", "md_to_dummy", "binary"),
         ("Missing Outcome or New Case (N, \\%)", "missing_nc_dummy", "binary"),
     ]
     

@@ -1,0 +1,10 @@
+--- Missing-outcome rate across intervention arms (N/A + NC) ---
+
+Per-arm missing totals (N/A + NC) and denominators:
+  Keheala    missing =   422 /  6093 (6.9%)
+  Platform   missing =   519 /  6816 (7.6%)
+  SMS        missing =   133 /  1675 (7.9%)
+  Control    missing =   159 /  2232 (7.1%)
+
+Chi-squared test of independence (2x4 table):
+  chi2(3) = 3.333, p = 0.343

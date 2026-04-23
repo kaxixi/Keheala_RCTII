@@ -201,219 +201,161 @@ def analyze_table_si6(df):
 
 def analyze_mdto_table(df):
     """
-    Generates Table SI6 (tblSI_MDTO.tex): Percentages of exclusions (MD, TO, NA, NC).
+    Generates Table SI6 (tblSI_MDTO.tex): post-randomization exclusion
+    categories (TO, MT4, N/A, NC) by intervention group.  Shows counts
+    and percentages of the randomized denominator.
     """
-    print("\n=== Generating Table SI6 (MDTO + NC Percentages) ===")
-    
-    is_true_dup = df['scrn'].astype(str).str.contains("Double|double|Duplicate|Test", na=False)
-    sub = df[~is_true_dup].copy()
-    sub['NC'] = (sub['treatmentoutcome'] == 'NC').astype(int)
-    
+    print("\n=== Generating Table SI6 (post-randomization exclusions) ===")
+
+    # Randomized = all records except SCRN-flagged duplicates.
+    # MT4 records ARE randomized (they received treatment assignment); they are
+    # post-randomization exclusions grouped with TO in the main narrative.
+    rand = df[df['duplicate'] == 0].copy()
+
     groups = ["Keheala Group", "SBCC Group", "SMS Reminder Group", "Control Group"]
-    labels = {"Keheala Group": "Keheala", "SBCC Group": "Platform", "SMS Reminder Group": "SMS", "Control Group": "Control"}
-    metrics = ["MD", "TO", "NA", "NC"]
-    
-    latex = []
-    latex.append(r"\scriptsize{\begin{tabular}{lcccc}")
-    latex.append(r"\hline \hline \\[-8pt]")
-    latex.append(r"\rowcolor{yellow!15}	            & MD         & TO        & N/A or Blank   & NC \\ \hline \\[-8pt]")
-    
+    labels = {"Keheala Group": "Keheala", "SBCC Group": "Platform",
+              "SMS Reminder Group": "SMS", "Control Group": "Control"}
+
+    def counts(sub):
+        na = sub['treatmentoutcome'].isna().sum()
+        nc = (sub['treatmentoutcome'] == 'NC').sum()
+        return {
+            "TO":  (sub['treatmentoutcome'] == 'TO').sum(),
+            "MT4": (sub['treatmentoutcome'] == 'MT4').sum(),
+            "N/A": na,
+            "NC":  nc,
+            "Missing": na + nc,
+        }
+
+    latex = [
+        r"\scriptsize{\begin{tabular}{lccccc}",
+        r"\hline \hline \\[-8pt]",
+        r"\rowcolor{yellow!15}            & TO             & MT4            & N/A or Blank   & NC             & Missing (Total) \\",
+        r"\rowcolor{yellow!15}            & n (\%)         & n (\%)         & n (\%)         & n (\%)         & n (\%)         \\ \hline \\[-8pt]",
+    ]
+
+    col_order = ["TO", "MT4", "N/A", "NC", "Missing"]
+
     for i, g in enumerate(groups):
-        grp_df = sub[sub['treatment_group'] == g]
-        n = len(grp_df)
-        row_str = f"{labels[g]}         "
-        for m in metrics:
-            cnt = grp_df[m].sum()
+        grp = rand[rand['treatment_group'] == g]
+        n = len(grp)
+        c = counts(grp)
+        row = f"{labels[g]:<10s} "
+        for m in col_order:
+            cnt = c[m]
             pct = (cnt / n * 100) if n > 0 else 0
-            row_str += f"& {pct:.1f}       "
-        row_str += r"\\"
-        latex.append(row_str)
+            row += f"& {cnt:,} ({pct:.1f})   "
+        row += r"\\"
+        latex.append(row)
         if i < len(groups) - 1:
             latex.append(r"[0.4em]")
-            
+
     latex.append(r"\hline")
-    row_str = f"Total           "
-    n_total = len(sub)
-    for m in metrics:
-        cnt = sub[m].sum()
+    n_total = len(rand)
+    c_total = counts(rand)
+    row = "Total      "
+    for m in col_order:
+        cnt = c_total[m]
         pct = (cnt / n_total * 100) if n_total > 0 else 0
-        row_str += f"& {pct:.1f}       "
-    row_str += r"\\ \hline \hline "
-    latex.append(row_str)
-    latex.append(r"\end{tabular}")
-    latex.append(r"}")
-    
+        row += f"& {cnt:,} ({pct:.1f})   "
+    row += r"\\ \hline \hline"
+    latex.append(row)
+    latex.append(r"\end{tabular}}")
+
+    # Chi-squared test: does the proportion of missing outcomes (N/A + NC)
+    # differ across intervention arms?  Cited in Results alongside Table MDTO.
+    from scipy.stats import chi2_contingency
+    contingency = []
+    for g in groups:
+        grp = rand[rand['treatment_group'] == g]
+        c = counts(grp)
+        contingency.append([c["Missing"], len(grp) - c["Missing"]])
+    chi2, p_missing, dof, _ = chi2_contingency(contingency)
+    log_lines = [
+        "--- Missing-outcome rate across intervention arms (N/A + NC) ---",
+        "",
+        "Per-arm missing totals (N/A + NC) and denominators:",
+    ]
+    for g, row in zip(groups, contingency):
+        log_lines.append(f"  {labels[g]:<10s} missing = {row[0]:>5d} / {row[0]+row[1]:>5d} "
+                         f"({row[0]/(row[0]+row[1])*100:.1f}%)")
+    log_lines += [
+        "",
+        f"Chi-squared test of independence (2x{len(groups)} table):",
+        f"  chi2({dof}) = {chi2:.3f}, p = {p_missing:.3f}",
+    ]
+    log_text = "\n".join(log_lines) + "\n"
+    with open(os.path.join(OUTPUT_DIR, "missing_outcome_by_arm.log"), "w") as f:
+        f.write(log_text)
+    print(log_text)
+
     with open(os.path.join(OUTPUT_DIR, "tblSI_MDTO.tex"), "w") as f:
         f.write("\n".join(latex))
-    print(f"Saved tblSI_MDTO.tex")
+    print("Saved tblSI_MDTO.tex")
 
-def analyze_si7_exact(df):
+def analyze_sensitivity_outcome_coding(df):
     """
-    Generates Table SI7 (tblSI_wNA.tex): Regressions included MD, TO, NA, NC as failures.
-    Sample: Drops Duplicates, TO, MT4. Codes outcomes as unsuccessful.
-    """
-    print("\n=== Generating Table SI7 (wNA/MDTO/NC) ===")
-    
-    is_true_dup = df['scrn'].astype(str).str.contains("Double|double|Duplicate|Test", na=False)
-    is_mt4 = (df['treatmentoutcome'] == "MT4")
-    is_to = (df['treatmentoutcome'] == "TO")
-    sub = df[(~is_true_dup) & (~is_mt4) & (~is_to)].copy()
-    
-    sub['unsuccessful_si7'] = sub['unsuccessful_outcome']
-    target_outcomes = ['TO', 'N/A', 'NC', 'MT4']
-    mask_target = sub['treatmentoutcome'].isin(target_outcomes)
-    mask_missing = sub['treatmentoutcome'].isna()
-    sub.loc[mask_target | mask_missing, 'unsuccessful_si7'] = 1
-    
-    models = []
-    models.append(run_ols(sub, "unsuccessful_si7 ~ C(treatment_group, Treatment(reference='Control Group'))", "SI7 (1)"))
-    models.append(run_ols(sub, "unsuccessful_si7 ~ C(treatment_group, Treatment(reference='Control Group')) + treatment_month_when_enrolled + C(study_month_when_enrolled)", "SI7 (2)"))
-    models.append(run_ols(sub, "unsuccessful_si7 ~ C(treatment_group, Treatment(reference='Control Group')) + treatment_month_when_enrolled + C(study_month_when_enrolled) + age_in_years + C(male) + C(English) + C(hiv_positive) + C(comorbidity_dummy) + C(extrapulmonary) + C(retreatment) + C(nutritionsupport_dummy) + C(bacteriologically_confirmed) + C(drugresistant)", "SI7 (3)"))
-    
-    rows_data = {}
-    for label, group in [("Keheala", "Keheala Group"), ("Platform", "SBCC Group"), ("SMS", "SMS Reminder Group")]:
-        row_cells = []
-        term = f"C(treatment_group, Treatment(reference='Control Group'))[T.{group}]"
-        for m in models:
-            if term in m.params:
-                coef = m.params[term]
-                se = m.bse[term]
-                pval = m.pvalues[term]
-                star = ""
-                if pval < 0.001: star = r"\sym{***}"
-                elif pval < 0.01: star = r"\sym{**}"
-                elif pval < 0.05: star = r"\sym{*}"
-                row_cells.append((f"{coef*100:.1f}{star}", f"({se*100:.1f})"))
-            else:
-                row_cells.append(("", ""))
-        rows_data[label] = row_cells
-        
-    latex = []
-    latex.append(r"\scriptsize{")
-    latex.append(r"\begin{tabular}{l*{3}{c}}")
-    latex.append(r"\hline\hline \\[-8pt]")
-    latex.append(r"\rowcolor{yellow!15}            &\multicolumn{1}{c}{(1)}&\multicolumn{1}{c}{(2)}&\multicolumn{1}{c}{(3)}\\")
-    latex.append(r"\hline \\[-8pt]")
-    for label in ["Keheala", "Platform", "SMS"]:
-        line = f"{label} & " + " & ".join([c[0] for c in rows_data[label]]) + r" \\"
-        latex.append(line)
-        line = "            &   " + " &   ".join([c[1] for c in rows_data[label]]) + r"         \\"
-        latex.append(line)
-        if label != "SMS": latex.append(r"[0.4em]")
-    latex.append(r"[0.4em]")
-    latex.append(r"\hline")
-    latex.append(r"\hline \\[-8pt]")
-    latex.append(r"Clinic \& Month Dummies & & Yes & Yes  \\")
-    latex.append(r"Individual Chars. & & & Yes  \\")
-    line = r"\(N\)       "
-    for m in models:
-        line += f"&       {int(m.nobs)}         "
-    line += r"\\"
-    latex.append(line)
-    latex.append(r"\hline\hline")
-    latex.append(r"\end{tabular}")
-    latex.append(r"}")
-    
-    with open(os.path.join(OUTPUT_DIR, "tblSI_wNA.tex"), "w") as f:
-        f.write("\n".join(latex))
-    print(f"Saved tblSI_wNA.tex")
+    Generates Table SI7 (tblSI_missing.tex): a 9-column sensitivity
+    table showing how the primary mITT estimates change under alternative
+    treatments of records with missing or non-standard outcomes.
 
-def analyze_si8(df):
-    """
-    Generates Table SI8 (tblSI_wMDTONA.tex).
-    Sample: Drops Duplicates only.
-    """
-    print("\n=== Generating Table SI8 (wMDTONA) ===")
-    
-    sub = df[df['duplicate'] == 0].copy()
-    sub['unsuccessful_si8'] = sub['unsuccessful_outcome']
-    target_outcomes = ['TO', 'N/A', 'NC', 'MT4']
-    mask_target = sub['treatmentoutcome'].isin(target_outcomes)
-    mask_missing = sub['treatmentoutcome'].isna()
-    sub.loc[mask_target | mask_missing, 'unsuccessful_si8'] = 1
-    
-    models = []
-    models.append(run_ols(sub, "unsuccessful_si8 ~ C(treatment_group, Treatment(reference='Control Group'))", "SI8 (1)"))
-    models.append(run_ols(sub, "unsuccessful_si8 ~ C(treatment_group, Treatment(reference='Control Group')) + treatment_month_when_enrolled + C(study_month_when_enrolled)", "SI8 (2)"))
-    models.append(run_ols(sub, "unsuccessful_si8 ~ C(treatment_group, Treatment(reference='Control Group')) + treatment_month_when_enrolled + C(study_month_when_enrolled) + age_in_years + C(male) + C(English) + C(hiv_positive) + C(comorbidity_dummy) + C(extrapulmonary) + C(retreatment) + C(nutritionsupport_dummy) + C(bacteriologically_confirmed) + C(drugresistant)", "SI8 (3)"))
-    
-    rows_data = {}
-    for label, group in [("Keheala", "Keheala Group"), ("Platform", "SBCC Group"), ("SMS", "SMS Reminder Group")]:
-        row_cells = []
-        term = f"C(treatment_group, Treatment(reference='Control Group'))[T.{group}]"
-        for m in models:
-            if term in m.params:
-                coef = m.params[term]
-                se = m.bse[term]
-                pval = m.pvalues[term]
-                star = ""
-                if pval < 0.001: star = r"\sym{***}"
-                elif pval < 0.01: star = r"\sym{**}"
-                elif pval < 0.05: star = r"\sym{*}"
-                row_cells.append((f"{coef*100:.1f}{star}", f"({se*100:.1f})"))
-            else:
-                row_cells.append(("", ""))
-        rows_data[label] = row_cells
-        
-    latex = []
-    latex.append(r"\scriptsize{")
-    latex.append(r"\begin{tabular}{l*{3}{c}}")
-    latex.append(r"\hline\hline \\[-8pt]")
-    latex.append(r"\rowcolor{yellow!15}            &\multicolumn{1}{c}{(1)}&\multicolumn{1}{c}{(2)}&\multicolumn{1}{c}{(3)}\\")
-    latex.append(r"\hline \\[-8pt]")
-    for label in ["Keheala", "Platform", "SMS"]:
-        line = f"{label} & " + " & ".join([c[0] for c in rows_data[label]]) + r" \\"
-        latex.append(line)
-        line = "            &   " + " &   ".join([c[1] for c in rows_data[label]]) + r"         \\"
-        latex.append(line)
-        if label != "SMS": latex.append(r"[0.4em]")
-    latex.append(r"[0.4em]")
-    latex.append(r"\hline")
-    latex.append(r"\hline \\[-8pt]")
-    latex.append(r"Clinic \& Month Dummies & & Yes & Yes  \\")
-    latex.append(r"Individual Chars. & & & Yes  \\")
-    line = r"\(N\)       "
-    for m in models:
-        line += f"&       {int(m.nobs)}         "
-    line += r"\\"
-    latex.append(line)
-    latex.append(r"\hline\hline")
-    latex.append(r"\end{tabular}")
-    latex.append(r"}")
-    
-    with open(os.path.join(OUTPUT_DIR, "tblSI_wMDTONA.tex"), "w") as f:
-        f.write("\n".join(latex))
-    print(f"Saved tblSI_wMDTONA.tex")
+      - Cols 1-3: Primary mITT (MD/TO and Missing dropped from sample).
+                  Reproduces the unsuccessful-outcome estimates in Table 3.
+      - Cols 4-6: Missing (N/A + NC) coded as unsuccessful; MD/TO dropped.
+      - Cols 7-9: MD/TO (MT4 + TO) and Missing both coded as unsuccessful.
 
-def analyze_combined_si7_si8(df):
+    Each block uses the same three specifications: unadjusted (1,4,7);
+    + clinic & month dummies (2,5,8); + individual characteristics (3,6,9).
     """
-    Generates Combined Table SI7 + SI8 (tblSI7_SI8_combined.tex).
-    """
-    print("\n=== Generating Combined SI7+SI8 Table ===")
-    
-    # SI7 Models
-    sub7 = df[df['duplicate'] == 0].copy()
-    sub7 = sub7[~sub7['treatmentoutcome'].isin(['MT4', 'TO'])]
-    sub7['outcome_si7'] = sub7['unsuccessful_outcome']
-    sub7.loc[sub7['treatmentoutcome'].isin(['N/A', 'NC']) | sub7['treatmentoutcome'].isna(), 'outcome_si7'] = 1
-    
-    models7 = []
-    models7.append(run_ols(sub7, "outcome_si7 ~ C(treatment_group, Treatment(reference='Control Group'))", "SI7(1)"))
-    models7.append(run_ols(sub7, "outcome_si7 ~ C(treatment_group, Treatment(reference='Control Group')) + treatment_month_when_enrolled + C(study_month_when_enrolled)", "SI7(2)"))
-    models7.append(run_ols(sub7, "outcome_si7 ~ C(treatment_group, Treatment(reference='Control Group')) + treatment_month_when_enrolled + C(study_month_when_enrolled) + age_in_years + C(male) + C(English) + C(hiv_positive) + C(comorbidity_dummy) + C(extrapulmonary) + C(retreatment) + C(nutritionsupport_dummy) + C(bacteriologically_confirmed) + C(drugresistant)", "SI7(3)"))
-    
-    # SI8 Models
-    sub8 = df[df['duplicate'] == 0].copy()
-    sub8['outcome_si8'] = sub8['unsuccessful_outcome']
-    sub8.loc[sub8['treatmentoutcome'].isin(['TO', 'N/A', 'NC', 'MT4']) | sub8['treatmentoutcome'].isna(), 'outcome_si8'] = 1
-    
-    models8 = []
-    models8.append(run_ols(sub8, "outcome_si8 ~ C(treatment_group, Treatment(reference='Control Group'))", "SI8(1)"))
-    models8.append(run_ols(sub8, "outcome_si8 ~ C(treatment_group, Treatment(reference='Control Group')) + treatment_month_when_enrolled + C(study_month_when_enrolled)", "SI8(2)"))
-    models8.append(run_ols(sub8, "outcome_si8 ~ C(treatment_group, Treatment(reference='Control Group')) + treatment_month_when_enrolled + C(study_month_when_enrolled) + age_in_years + C(male) + C(English) + C(hiv_positive) + C(comorbidity_dummy) + C(extrapulmonary) + C(retreatment) + C(nutritionsupport_dummy) + C(bacteriologically_confirmed) + C(drugresistant)", "SI8(3)"))
-    
-    all_models = models7 + models8
-    
+    print("\n=== Generating Sensitivity Table (9 cols) ===")
+
+    specs = [
+        ("", ""),
+        (" + treatment_month_when_enrolled + C(study_month_when_enrolled)", " + month"),
+        (" + treatment_month_when_enrolled + C(study_month_when_enrolled) + age_in_years + C(male) + C(English) + C(hiv_positive) + C(comorbidity_dummy) + C(extrapulmonary) + C(retreatment) + C(nutritionsupport_dummy) + C(bacteriologically_confirmed) + C(drugresistant)", " + controls"),
+    ]
+
+    # Block 1 — Primary mITT: drops MD/TO and Missing from sample; outcome unchanged.
+    sub_primary = df[df['MITT'] == 1].copy()
+    sub_primary['outcome_primary'] = sub_primary['unsuccessful_outcome']
+    models_primary = [
+        run_ols(sub_primary,
+                f"outcome_primary ~ C(treatment_group, Treatment(reference='Control Group')){spec}",
+                f"Primary({i+1}){label}")
+        for i, (spec, label) in enumerate(specs)
+    ]
+
+    # Block 2 — Missing coded as unsuccessful; MD/TO still dropped.
+    sub_missing = df[df['duplicate'] == 0].copy()
+    sub_missing = sub_missing[~sub_missing['treatmentoutcome'].isin(['MT4', 'TO'])]
+    sub_missing['outcome_missing'] = sub_missing['unsuccessful_outcome']
+    sub_missing.loc[
+        sub_missing['treatmentoutcome'].isin(['N/A', 'NC']) | sub_missing['treatmentoutcome'].isna(),
+        'outcome_missing'
+    ] = 1
+    models_missing = [
+        run_ols(sub_missing,
+                f"outcome_missing ~ C(treatment_group, Treatment(reference='Control Group')){spec}",
+                f"Missing({i+1}){label}")
+        for i, (spec, label) in enumerate(specs)
+    ]
+
+    # Block 3 — MD/TO and Missing both coded as unsuccessful.
+    sub_mdto = df[df['duplicate'] == 0].copy()
+    sub_mdto['outcome_mdto'] = sub_mdto['unsuccessful_outcome']
+    sub_mdto.loc[
+        sub_mdto['treatmentoutcome'].isin(['TO', 'N/A', 'NC', 'MT4']) | sub_mdto['treatmentoutcome'].isna(),
+        'outcome_mdto'
+    ] = 1
+    models_mdto = [
+        run_ols(sub_mdto,
+                f"outcome_mdto ~ C(treatment_group, Treatment(reference='Control Group')){spec}",
+                f"MDTO({i+1}){label}")
+        for i, (spec, label) in enumerate(specs)
+    ]
+
+    all_models = models_primary + models_missing + models_mdto
+
     rows_data = {}
     for label, group in [("Keheala", "Keheala Group"), ("Platform", "SBCC Group"), ("SMS", "SMS Reminder Group")]:
         row_cells = []
@@ -431,13 +373,13 @@ def analyze_combined_si7_si8(df):
             else:
                 row_cells.append(("", ""))
         rows_data[label] = row_cells
-        
+
     latex = []
     latex.append(r"\scriptsize{")
-    latex.append(r"\begin{tabular}{l*{6}{c}}")
+    latex.append(r"\begin{tabular}{l*{9}{c}}")
     latex.append(r"\hline\hline \\[-8pt]")
-    latex.append(r" & \multicolumn{3}{c}{\textbf{MD/TO dropped}} & \multicolumn{3}{c}{\textbf{MD/TO coded as unsuccessful}} \\")
-    latex.append(r"\rowcolor{yellow!15}            &\multicolumn{1}{c}{(1)}&\multicolumn{1}{c}{(2)}&\multicolumn{1}{c}{(3)}&\multicolumn{1}{c}{(4)}&\multicolumn{1}{c}{(5)}&\multicolumn{1}{c}{(6)}\\")
+    latex.append(r" & \multicolumn{3}{c}{\textbf{\shortstack{mITT \\ Analysis}}} & \multicolumn{3}{c}{\textbf{\shortstack{Missing coded \\ as unsuccessful}}} & \multicolumn{3}{c}{\textbf{\shortstack{MD/TO and Missing \\ coded as unsuccessful}}} \\")
+    latex.append(r"\rowcolor{yellow!15}            &\multicolumn{1}{c}{(1)}&\multicolumn{1}{c}{(2)}&\multicolumn{1}{c}{(3)}&\multicolumn{1}{c}{(4)}&\multicolumn{1}{c}{(5)}&\multicolumn{1}{c}{(6)}&\multicolumn{1}{c}{(7)}&\multicolumn{1}{c}{(8)}&\multicolumn{1}{c}{(9)}\\")
     latex.append(r"\hline \\[-8pt]")
     for label in ["Keheala", "Platform", "SMS"]:
         line = f"{label} & " + " & ".join([c[0] for c in rows_data[label]]) + r" \\"
@@ -448,8 +390,8 @@ def analyze_combined_si7_si8(df):
     latex.append(r"[0.4em]")
     latex.append(r"\hline")
     latex.append(r"\hline \\[-8pt]")
-    latex.append(r"Clinic \& Month Dummies & & Yes & Yes & & Yes & Yes \\")
-    latex.append(r"Individual Chars. & & & Yes & & & Yes \\")
+    latex.append(r"Clinic \& Month Dummies & & Yes & Yes & & Yes & Yes & & Yes & Yes \\")
+    latex.append(r"Individual Chars. & & & Yes & & & Yes & & & Yes \\")
     line = r"\(N\)       "
     for m in all_models:
         line += f"&       {int(m.nobs)}         "
@@ -458,12 +400,8 @@ def analyze_combined_si7_si8(df):
     latex.append(r"\hline\hline")
     latex.append(r"\end{tabular}")
     latex.append(r"}")
-    
-    with open(os.path.join(OUTPUT_DIR, "tblSI7_SI8_combined.tex"), "w") as f:
-        f.write("\n".join(latex))
-    print(f"Saved tblSI7_SI8_combined.tex")
 
-    # Also save as tblSI_missing.tex (referenced by Overleaf main document)
+    # Manuscript references this table via \input{tblSI_missing.tex}.
     with open(os.path.join(OUTPUT_DIR, "tblSI_missing.tex"), "w") as f:
         f.write("\n".join(latex))
     print(f"Saved tblSI_missing.tex")
@@ -964,9 +902,7 @@ def main():
     analyze_table_si6(df)
     analyze_mdto_table(df)
     
-    analyze_si7_exact(df)
-    analyze_si8(df)
-    analyze_combined_si7_si8(df)
+    analyze_sensitivity_outcome_coding(df)
     
     analyze_si9(df)
     analyze_si10(df)

@@ -66,8 +66,11 @@ vars_to_keep = [
     "subcountyregistrationnumber", "patientname", "treatmentoutcome", "treatmentoutcomedate",
     "sexmf", "ageonregistration", "hivstatus", "comorbidity", "typeoftbpep", "typeofpatient",
     "nutritionsupport", "resistancepattern", "sputumsmearexamination0thmon", "genexpert",
-    "province", "county", "subcounty", "zone", "healthfacility", "dateofregistration", "source_file"
+    "province", "county", "subcounty", "zone", "healthfacility", "dateofregistration",
+    "clinic_id", "source_file"
 ]
+
+CLINIC_ID_MAP_FILE = OUTPUT_FOLDER / "clinic_id_mapping.csv"
 
 # Load Excel files
 def load_excel_files(folder, tag):
@@ -273,6 +276,32 @@ def main():
         mask_exclude = df_all["outcome_norm"].isin(["MT4", "NTB"])
         df_all = df_all[~mask_exclude]
         print(f"Rows after outcome exclusions (MT4, NTB only): {len(df_all)}")
+
+    # -------------------------------------------------------------------------
+    # 6. Assign clinic_id based on (healthfacility, subcounty) pairs
+    # -------------------------------------------------------------------------
+    print("Assigning clinic_id...")
+    df_all["hf_lower"] = df_all["healthfacility"].astype(str).str.lower().str.strip()
+    df_all["sc_lower"] = df_all["subcounty"].astype(str).str.lower().str.strip()
+    df_all["clinic_id"] = df_all.groupby(["hf_lower", "sc_lower"]).ngroup()
+
+    # Save the mapping for use by prepare_study_data.py
+    clinic_map = (
+        df_all.groupby(["hf_lower", "sc_lower", "clinic_id"])
+        .agg(
+            healthfacility=("healthfacility", "first"),
+            subcounty=("subcounty", "first"),
+            county=("county", "first"),
+            n_patients=("clinic_id", "size"),
+        )
+        .reset_index()
+        [["clinic_id", "healthfacility", "subcounty", "county", "hf_lower", "sc_lower", "n_patients"]]
+        .sort_values("clinic_id")
+    )
+    clinic_map.to_csv(CLINIC_ID_MAP_FILE, index=False)
+    print(f"  Saved clinic_id mapping ({len(clinic_map)} clinics) to {CLINIC_ID_MAP_FILE}")
+
+    df_all = df_all.drop(columns=["hf_lower", "sc_lower"])
 
     # Keep selected vars
     df_all = df_all[[col for col in vars_to_keep if col in df_all.columns]]

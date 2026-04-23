@@ -27,3 +27,20 @@ Control                SMS Reminder         Platform (SBCC)      Keheala
 --------------------   ------------------   ------------------   ------------------  
 Allocated: 2,224       Allocated: 1,670     Allocated: 6,793     Allocated: 6,066    
 Analyzed:  1,997       Analyzed:  1,475     Analyzed:  6,057     Analyzed:  5,433    
+
+
+--- Follow-up Duration (mITT) ---
+Days from enrolment (dateregistered_formatted) to outcome recording
+(treatmentoutcomedate_formatted).  Records with implausible date pairs
+(negative follow-up, or > 5 years) are excluded.
+
+Valid follow-up records: 14,468 of 14,962 mITT (494 dropped for implausible dates)
+
+  Arm                         N   Median       Q1       Q3      Max
+  ---------------------- ------ -------- -------- -------- --------
+  Control Group           1,930      165      121      182     1305
+  SMS Reminder Group      1,423      166      126      184     1288
+  SBCC Group              5,859      165      125      183     1286
+  Keheala Group           5,256      163      123      182     1291
+  All mITT               14,468      164      123      183     1305
+  (follow-up expressed in days)

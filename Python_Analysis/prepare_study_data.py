@@ -33,13 +33,18 @@ def clean_data():
     # rename sysgroup treatment_group
     df = df.rename(columns={"sysgroup": "treatment_group"})
 
-    # 3. Drop Misdiagnosed, Transfer-Outs, and Known Duplicates
-    # gen duplicate = 0 -> replace if regexm(scrn, "Double")...
-    duplicate_mask = df["scrn"].str.contains("Double|double|Duplicate|Test", regex=True, na=False) | (df["treatmentoutcome"] == "MT4")
+    # 3. Flag Duplicates and Transfer-Outs (post-randomization exclusions set up below)
+    # `duplicate` flags SCRN test/double/duplicate records — genuine pre-randomization
+    # data-entry artifacts that are dropped from ITT. MT4 is NOT flagged here: MT4
+    # records are patients who were randomized and started DS-TB treatment but were
+    # subsequently re-registered elsewhere (typically into Kenya's DR-TB register
+    # after mid-treatment resistance detection); functionally they behave like TO.
+    duplicate_mask = df["scrn"].str.contains("Double|double|Duplicate|Test", regex=True, na=False)
     df["duplicate"] = duplicate_mask.astype(int)
 
-    # gen MDTO = 0 -> replace if TO
-    df["MDTO"] = (df["treatmentoutcome"] == "TO").astype(int)
+    # `MDTO` flags randomized patients who left the DS-TB analytic cohort: TO (transfer
+    # to another facility) and MT4 (moved to DR-TB register / re-registered elsewhere).
+    df["MDTO"] = df["treatmentoutcome"].isin(["TO", "MT4"]).astype(int)
 
     # gen prereg_exclusion = 0 -> replace if duplicate | MDTO | N/A | missing | NC
     prereg_mask = (df["duplicate"] == 1) | (df["MDTO"] == 1) | (df["treatmentoutcome"] == "N/A") | df["treatmentoutcome"].isna() | (df["treatmentoutcome"] == "NC")
@@ -210,11 +215,55 @@ def clean_data():
     # Also check for other non-positive documented values (unknown status remains NaN)
     df.loc[df["hivstatus"].isin(["Unknown", "Not Done", "ND"]), "hiv_positive"] = np.nan
 
-    # Clinic ID
-    if "subcounty" in df.columns and "clinic" in df.columns:
+    # Clinic ID — load from TIBU mapping for unified IDs across datasets
+    TIBU_CLINIC_MAP = os.path.join(ROOT_DIR, "TIBU_data/output/clinic_id_mapping.csv")
+    if os.path.exists(TIBU_CLINIC_MAP) and "clinic" in df.columns:
+        print("Loading TIBU clinic_id mapping...")
+        cmap = pd.read_csv(TIBU_CLINIC_MAP)
+
+        # Study clinic names that don't match TIBU exactly — map to TIBU equivalent
+        STUDY_TO_TIBU_NAME = {
+            "apline dispensary": "ap line dispensary",
+            "cana family health centre": "cana family life",
+            "kalimoni mission hospital (juja)": "kalimoni hospital (thika)",
+            "kisumu county referral hospital": "kisumu district hospital",
+            "mbotela": "mbotela clinic",
+            "st. alice edarp": "st alice (edarp) dandora",
+            "st. barkita": "st barkita dispensary utawala",
+            "st. elizabeth lorugum health centre": "st elizabeth lorugum health centre",
+            "st. francis community hospital": "st francis community hospital (kasarani)",
+            "st. vincent edarp": "st vincent catholic clinic",
+            "st. vincents de paul health centre": "st vincents de paul health centre",
+            "swop clinic": "sex workers operation project (swop)",
+        }
+
+        # Build lookup: lowered TIBU facility name -> clinic_id
+        tibu_lookup = dict(zip(cmap["hf_lower"], cmap["clinic_id"]))
+
+        # Map study clinic names to TIBU clinic_ids
+        study_clinic_lower = df["clinic"].str.lower().str.strip()
+        # Apply fuzzy name corrections first
+        mapped_names = study_clinic_lower.map(STUDY_TO_TIBU_NAME).fillna(study_clinic_lower)
+        df["clinic_id"] = mapped_names.map(tibu_lookup)
+
+        n_matched = df["clinic_id"].notna().sum()
+        n_total = len(df)
+        n_unmatched_clinics = df.loc[df["clinic_id"].isna(), "clinic"].nunique() if df["clinic_id"].isna().any() else 0
+        print(f"  Matched {n_matched:,}/{n_total:,} patients to TIBU clinic_id")
+        if n_unmatched_clinics > 0:
+            unmatched = df.loc[df["clinic_id"].isna(), "clinic"].unique()
+            print(f"  WARNING: {n_unmatched_clinics} study clinics unmatched: {list(unmatched)}")
+            # Assign new IDs for truly unmatched clinics (starting after max TIBU ID)
+            max_id = int(cmap["clinic_id"].max())
+            unmatched_map = {name: max_id + 1 + i for i, name in enumerate(sorted(unmatched))}
+            df.loc[df["clinic_id"].isna(), "clinic_id"] = (
+                df.loc[df["clinic_id"].isna(), "clinic"].map(unmatched_map)
+            )
+        df["clinic_id"] = df["clinic_id"].astype(int)
+    elif "subcounty" in df.columns and "clinic" in df.columns:
+        print("Warning: TIBU clinic_id mapping not found, generating local IDs")
         df["clinic_id"] = df.groupby(["subcounty", "clinic"]).ngroup()
     else:
-        # Fallback if columns missing?
         print("Warning: subcounty or clinic missing for clinic_id creation")
         df["clinic_id"] = 0
 

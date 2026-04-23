@@ -4,15 +4,21 @@ Keheala Study 2 - CONSORT Flow Diagram Generator
 ================================================
 
 Purpose:
-    Generates the data points for the CONSORT flow diagram.
+    Generates the data points for the CONSORT flow diagram, plus a by-arm
+    follow-up-duration summary used in the Patient Characteristics section
+    of the manuscript.
     Outputs a structured text log (output/consort_flow.log) visualizing the flow:
-    Assessed -> Excluded -> Randomized (MITT) -> Allocation -> Analysis (MITT).
+    Assessed -> Excluded -> Randomized (MITT) -> Allocation -> Analysis (MITT),
+    followed by follow-up-duration statistics by arm.
 
 Logic:
     1. Loads cleaned (de-identified) study data which preserves all rows
        including duplicates, TO, NC, and missing-outcome cases.
     2. Uses pre-computed flags (duplicate, MITT) and treatmentoutcome values
        to derive exclusion counts.
+    3. Computes follow-up duration (days between dateregistered_formatted
+       and treatmentoutcomedate_formatted) for the mITT sample, dropping
+       records with implausible date pairs (negative or >5 years).
 
 Output:
     - Console printout.
@@ -105,6 +111,44 @@ def generate_consort():
     # Analyzed (mITT)
     analyzed = [group_counts_mitt.get(g, 0) for g in groups]
     log(row_fmt.format(*[f"Analyzed:  {n:,}" for n in analyzed]))
+
+    # --- Follow-up Duration (mITT) ---
+    log("\n\n--- Follow-up Duration (mITT) ---")
+    log("Days from enrolment (dateregistered_formatted) to outcome recording")
+    log("(treatmentoutcomedate_formatted).  Records with implausible date pairs")
+    log("(negative follow-up, or > 5 years) are excluded.")
+
+    fu = df_mitt.copy()
+    fu["_enroll"] = pd.to_datetime(fu["dateregistered_formatted"], errors="coerce")
+    fu["_outcome"] = pd.to_datetime(fu["treatmentoutcomedate_formatted"], errors="coerce")
+    fu["_followup_days"] = (fu["_outcome"] - fu["_enroll"]).dt.days
+
+    valid = fu[(fu["_followup_days"] >= 0) & (fu["_followup_days"] <= 1825)]
+    n_dropped = len(fu) - len(valid)
+    log(f"\nValid follow-up records: {len(valid):,} of {len(fu):,} mITT "
+        f"({n_dropped:,} dropped for implausible dates)")
+
+    fu_fmt = "  {:<22} {:>6} {:>8} {:>8} {:>8} {:>8}"
+    log("")
+    log(fu_fmt.format("Arm", "N", "Median", "Q1", "Q3", "Max"))
+    log(fu_fmt.format("-" * 22, "-" * 6, "-" * 8, "-" * 8, "-" * 8, "-" * 8))
+
+    def _row(label, d):
+        if len(d) == 0:
+            return fu_fmt.format(label, "0", "-", "-", "-", "-")
+        return fu_fmt.format(
+            label,
+            f"{len(d):,}",
+            f"{d.median():.0f}",
+            f"{d.quantile(0.25):.0f}",
+            f"{d.quantile(0.75):.0f}",
+            f"{d.max():.0f}",
+        )
+
+    for g in groups:
+        log(_row(g, valid.loc[valid["treatment_group"] == g, "_followup_days"]))
+    log(_row("All mITT", valid["_followup_days"]))
+    log("  (follow-up expressed in days)")
 
     # Save to file
     os.makedirs(OUTPUT_DIR, exist_ok=True)
