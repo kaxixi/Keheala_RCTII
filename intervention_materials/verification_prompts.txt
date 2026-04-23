@@ -1,0 +1,24 @@
+Scope: Partial — initial prompt confirmed; escalation-reminder text to be added from Keheala records
+Source: Manuscript excerpt (initial prompt); Keheala production platform (escalations, pending)
+Date extracted: 2026-04-20
+
+---
+
+Platform verification prompts delivered to participants in the platform and
+Keheala arms. Each day, the platform sent an automated request that
+participants self-verify medication adherence (i.e., two-way SMS). Default
+delivery time: 07:00 local time (adjustable by the enrolling care provider or
+by the participant on request). Participants who failed to verify within an
+hour received up to two further automated reminders at hourly intervals.
+
+Initial prompt:
+
+    It's time!  Have you taken your medication? Dial *694# to verify.
+
+First escalation reminder (delivered ~1 hour after initial, if no verification):
+
+    [Awaiting text from Keheala operations records]
+
+Second escalation reminder (delivered ~2 hours after initial, if no verification):
+
+    [Awaiting text from Keheala operations records]

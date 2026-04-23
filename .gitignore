@@ -24,7 +24,8 @@ Python_Analysis/output/missing_value_logic_review.md
 Keheala_RCTII.pdf
 
 # Internal-use scripts and output (not for public sharing)
-Python_Analysis/export_clinic_table.py
+Python_Analysis/clinics_export_chars_tbl.py
+Python_Analysis/clinics_urban_rural_mapping.py
 Python_Analysis/internal_output/
 
 # Session logs and archives
@@ -36,6 +37,15 @@ Python_Analysis/archive/
 .claude/
 CLAUDE.md
 README_for_AI_Assistants
+
+# Private reviewer feedback (CONSORT reports, etc.)
+References/
+
+# Google Drive / Overleaf sync artifacts
+*.conflict*
+
+# Local backup files
+*.backup-*
 
 # OS and Python
 .DS_Store

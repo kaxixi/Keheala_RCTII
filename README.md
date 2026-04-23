@@ -55,13 +55,13 @@ The following scripts constitute the analysis pipeline. Each reads from `deident
 *   **Table 4**: Urine Test Verification Analysis.
 
 #### `analysis_si.py`
-*   Supplementary Tables SI5–SI13: Comparison of Interventions (SI5), Exclusion/NC Counts (SI6), Missing Data Sensitivity (SI7–SI8), Subgroup Analyses for bacteriologically confirmed, pulmonary, and non-retreatment patients (SI9–SI11), Time-Split Analyses (SI12–SI13).
+*   Supplementary Tables SI5–SI13: Comparison of Interventions (SI5), Exclusion/NC Counts (SI6), Missing Data Sensitivity (SI7), Subgroup Analyses for bacteriologically confirmed, pulmonary, and non-retreatment patients (SI9–SI11), Time-Split Analyses (SI12–SI13).
 
 #### `analysis_dqa.py`
 *   Data Quality Assessment (SI14): Platform-level outcome comparisons and county-level crosstabs.
 
 #### `generate_consort.py`
-*   Calculates numbers for the CONSORT flow diagram.
+*   Calculates numbers for the CONSORT flow diagram and outputs by-arm follow-up-duration statistics (median / IQR / max) used in the Patient Characteristics section.
 
 ## Data Preparation Scripts (Reference Only)
 
@@ -81,9 +81,11 @@ The de-identification pipeline generates datasets at two levels: Level 1 (names 
 
 The study dataset contains 17,160 patient records. Each row includes treatment assignment, demographic covariates, and treatment outcomes. Pre-computed flags indicate analysis inclusion:
 
-- `duplicate` — 1 if the record is a duplicate/test entry or misdiagnosis (excluded from all analyses)
+- `duplicate` — 1 if the record is a SCRN-flagged test/double/duplicate data-entry artifact (N=344; excluded from ITT)
+- `MDTO` — 1 if the record is a randomized patient who left the DS-TB analytic cohort (TO = transferred to another facility; MT4 = moved to Kenya's DR-TB register after mid-treatment resistance detection)
 - `MITT` — 1 if the record is in the modified intent-to-treat sample (N=14,962)
-- `prereg_exclusion` — 1 if excluded from mITT (duplicates, transfers out, missing outcomes, not evaluated)
+- `prereg_exclusion` — 1 if excluded from mITT (duplicates, TO/MT4, missing outcomes, NC)
+- `ITT` — 1 if the record is randomized (not a SCRN duplicate; N=16,816)
 - `unsuccessful_outcome`, `died`, `LTFU`, `failed` — binary outcome variables
 
 Patient identifiers have been replaced with anonymous integers (`anon_patient_id`, `anon_scrn`). Facility names and county names have been replaced with numeric IDs (`clinic_id`, `county_id`, `subcounty_id`).
@@ -114,6 +116,10 @@ The analysis uses linear probability models (OLS) estimated with `statsmodels`:
 
 Treatment effects are reported as reductions in risk (percentage points) relative to the control group. Fully adjusted models use complete cases (N=13,485) due to missing covariate values.
 
+## Intervention Materials
+
+A sample of the materials used in the study's digital adherence interventions — SMS reminder text, weekly motivational messages, platform verification prompts, TB-information page content, and a summary of the study team's contact-queue protocol for the Keheala arm — is provided in [`intervention_materials/`](intervention_materials/). These materials are a curated sample; the complete message library and operational protocols are proprietary to Keheala, Inc. and available on reasonable request.
+
 ## License
 
-[To be determined]
+Code is released under the **MIT License** (see [`LICENSE`](LICENSE)). De-identified data are released under **CC-BY-4.0** (see [`LICENSE-DATA`](LICENSE-DATA)). Intervention materials in [`intervention_materials/`](intervention_materials/) are released under **CC-BY-NC-4.0** (see [`intervention_materials/LICENSE`](intervention_materials/LICENSE)).

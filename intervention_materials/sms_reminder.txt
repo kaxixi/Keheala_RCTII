@@ -1,0 +1,13 @@
+Scope: Complete
+Source: Manuscript excerpt (cross-referenced with Keheala study protocol)
+Date extracted: 2026-04-20
+
+---
+
+Daily SMS reminder delivered to all participants randomized to the SMS arm.
+Default delivery time: 07:00 local time (adjustable by the enrolling care
+provider or by the participant on request).
+
+Message body:
+
+    Please take the medication on time.
