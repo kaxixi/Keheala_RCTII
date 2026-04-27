@@ -760,41 +760,44 @@ def analyze_table4(df_clean):
 
 def analyze_verification_rates(df):
     print("\n--- Generating Verification Rates Text ---")
-    
-    sub = df[df["treatment_group"].isin(["SBCC Group", "Keheala Group"])].copy()
-    print(f"Subset N: {len(sub)}")
-    
+
+    sub = df[(df["treatment_group"].isin(["SBCC Group", "Keheala Group"])) & (df["MITT"] == 1)].copy()
+    print(f"mITT subset N: {len(sub)}")
+
     means = sub.groupby("treatment_group")["compliancescore"].mean()
+    n_platform = int((sub["treatment_group"] == "SBCC Group").sum())
+    n_keheala = int((sub["treatment_group"] == "Keheala Group").sum())
     mean_platform = means.get("SBCC Group", 0) * 100
     mean_keheala = means.get("Keheala Group", 0) * 100
-    
-    print(f"Platform Mean: {mean_platform:.1f}%")
-    print(f"Keheala Mean: {mean_keheala:.1f}%")
-    
+
+    print(f"Platform (mITT) N: {n_platform}, Mean: {mean_platform:.1f}%")
+    print(f"Keheala  (mITT) N: {n_keheala}, Mean: {mean_keheala:.1f}%")
+
     formula = "compliancescore ~ C(treatment_group, Treatment(reference='SBCC Group'))"
-    
+
     model = smf.ols(formula, data=sub).fit()
-    
+
     term = "C(treatment_group, Treatment(reference='SBCC Group'))[T.Keheala Group]"
-    
+
     if term in model.params:
         diff_val = model.params[term] * 100
         ci = model.conf_int().loc[term] * 100
         p = model.pvalues[term]
-        
-        p_str = f"{p:.3f}".lstrip('0') 
+
+        p_str = f"{p:.3f}".lstrip('0')
         if p < 0.001: p_str = "<.001"
         else: p_str = f"p={p_str}"
-        
+
         text = (
-            f"Verification rates were {mean_platform:.1f}% on average for individuals in the platform group "
-            f"and {mean_keheala:.1f}% in the Keheala group, a difference of {diff_val:.1f} percentage points "
-            f"(95% C.I.: {ci[0]:.1f}-{ci[1]:.1f}; {p_str})."
+            f"Verification rates were {mean_platform:.1f}\\% on average for individuals in the platform group "
+            f"(N={n_platform:,}) and {mean_keheala:.1f}\\% in the Keheala group (N={n_keheala:,}), "
+            f"a difference of {diff_val:.1f} percentage points "
+            f"(95\\% C.I.: {ci[0]:.1f}-{ci[1]:.1f}; {p_str})."
         )
-        
+
         print("\nGenerated Text:")
         print(text)
-        
+
         out_path = os.path.join(ROOT_DIR, "Python_Analysis/output/verificationrates.txt")
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         with open(out_path, "w") as f:

@@ -1,1 +1,1 @@
-Verification rates were 9.5% on average for individuals in the platform group and 38.2% in the Keheala group, a difference of 28.7 percentage points (95% C.I.: 27.7-29.6; <.001).
+Verification rates were 9.7\% on average for individuals in the platform group (N=6,057) and 38.8\% in the Keheala group (N=5,433), a difference of 29.1 percentage points (95\% C.I.: 28.1-30.1; <.001).
